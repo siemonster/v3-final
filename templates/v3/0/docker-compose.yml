@@ -1,0 +1,860 @@
+version: '2'
+volumes:
+  es-config:
+    driver: rancher-nfs
+  fouroneone-data:
+    driver: rancher-nfs
+  logstash-collector-config:
+    driver: rancher-nfs
+  logstash-collector-pipeline:
+    driver: rancher-nfs
+  logstash-indexer-config:
+    driver: rancher-nfs
+  logstash-indexer-pipeline:
+    driver: rancher-nfs
+  mgob-config:
+    driver: rancher-nfs
+  mgob-storage:
+    driver: rancher-nfs
+  reports_config:
+    driver: rancher-nfs
+services:
+  mgob:
+    image: ikuturso/mgob
+    volumes:
+      - mgob-config:/config
+      - mgob-storage:/storage
+    environment:
+      MONGO_PASS: ${MONGODB_PASS}
+      MONGO_USER: ${MONGODB_USER}
+    restart: always
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+  haveged:
+    privileged: true
+    image: harbur/haveged:1.7c-1
+    stdin_open: true
+    tty: true
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.scheduler.global: 'true'
+  dradis:
+    image: ikuturso/dradis
+    depends_on:
+      - redis
+    volumes:
+      - dradis-template:/home/dradis-ce/templates
+      - dradis-db:/home/dradis-ce/db
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  siem-lb:
+    image: rancher/lb-service-haproxy:v0.9.1
+    ports:
+    - 443:443/tcp
+    labels:
+      io.rancher.scheduler.affinity:host_label: makara=1
+      io.rancher.container.agent.role: environmentAdmin,agent
+      io.rancher.container.agent_service.drain_provider: 'true'
+      io.rancher.container.create_agent: 'true'
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft: makara=1
+  redis:
+    image: redis
+    restart: always
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  elastalert:
+    image: ikuturso/elastalert:v3
+    environment:
+      ELASTICSEARCH_USER: elastic
+      ELASTIC_PWD: ${ELASTIC_PWD}
+      ELASTICSEARCH_HOST: es-client-2
+    stdin_open: true
+    tty: true
+    volumes:
+    - elastalert_rules:/usr/share/elastalert
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+  gmailrelay:
+    image: ikuturso/gmailrelay
+    environment:
+      EMAIL: ${GMAILRELAY_EMAIL}
+      EMAILPASS: ${GMAILRELAY_EMAILPASS}
+      MYNETWORKS: 10.0.0.0/8 192.168.0.0/16 172.0.0.0/8
+      SYSTEM_TIMEZONE: America/Chicago
+    tty: true
+    ports:
+    - 9025:25/tcp
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+  alerta:
+    image: ikuturso/siemonster-siren
+    environment:
+      ADMIN_USERS: not-set
+      ALLOWED_EMAIL_DOMAIN: '*'
+      ALLOWED_ENVIRONMENTS: Production,Development
+      ALLOWED_GITHUB_ORGS: '*'
+      ALLOWED_GITLAB_GROUPS: '*'
+      AUTH_REQUIRED: 'False'
+      CLIENT_ID: not-set
+      CLIENT_SECRET: not-set
+      CUSTOMER_VIEWS: 'False'
+      GITLAB_URL: not-set
+      MONGO_URI: mongodb://alerta-db:27017/monitoring
+      ORIGIN_BLACKLIST: not-set
+      PLUGINS: reject
+      PROVIDER: basic
+    stdin_open: true
+    tty: true
+    labels:
+      io.rancher.sidekicks: alerta-db
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  minemeld:
+    image: ikuturso/minemeld:1.0
+    stdin_open: true
+    tty: true
+    tmpfs: /run
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+  es-master:
+    cap_add:
+    - IPC_LOCK
+    image: ikuturso/es-image:6.2.21
+    hostname: es-master
+    environment:
+      BEATS_PWD: ${BEATS_PWD}
+      CA_PWD: ${CA_PWD}
+      CLUSTER_NAME: siemonster
+      HEAP_SIZE: ${MASTER_HEAP_SIZE}
+      ELASTIC_PWD: ${ELASTIC_PWD}
+      ADMIN_PWD: ${ELASTIC_PWD}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      KIBANA_PWD: ${KIBANA_PWD}
+      KS_PWD: ${KS_PWD}
+      LOGSTASH_PWD: ${LOGSTASH_PWD}
+      MONITOR_PWD: ${MONITOR_PWD}
+      NODE_DATA: 'false'
+      NODE_INGEST: 'false'
+      NODE_MASTER: 'true'
+      NODE_NAME: es-master
+      TS_PWD: ${TS_PWD}
+      bootstrap.memory_lock: 'true'
+    ulimits:
+      memlock:
+        hard: -1
+        soft: -1
+      nofile:
+        hard: 65536
+        soft: 65536
+    volumes:
+    - es-config:/elasticsearch/config
+    labels:
+      io.rancher.container.hostname_override: container_name
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  es-data-node1:
+    cap_add:
+    - IPC_LOCK
+    image: ikuturso/es-image:6.2.21
+    environment:
+      CA_PWD: ${CA_PWD}
+      CLUSTER_NAME: siemonster
+      HEAP_SIZE: ${DATA_HEAP_SIZE}
+      KS_PWD: ${KS_PWD}
+      NODE_DATA: 'true'
+      NODE_INGEST: 'false'
+      NODE_MASTER: 'false'
+      NODE_NAME: node-kraken
+      TS_PWD: ${TS_PWD}
+      bootstrap.memory_lock: 'true'
+    ulimits:
+      memlock:
+        hard: -1
+        soft: -1
+      nofile:
+        hard: 65536
+        soft: 65536
+    volumes:
+    - es-config:/elasticsearch/config
+    volumes_from:
+    - es-data-node1-volume
+    labels:
+      io.rancher.sidekicks: es-data-node1-volume
+      io.rancher.container.hostname_override: container_name
+      io.rancher.scheduler.affinity:host_label: kraken=1
+  es-data-node1-volume:
+    image: alpine
+    stdin_open: true
+    volumes:
+    - /elasticsearch/data
+    tty: true
+    command:
+    - /bin/ash
+    labels:
+      io.rancher.scheduler.affinity:host_label: kraken=1
+  es-data-node2:
+    cap_add:
+    - IPC_LOCK
+    image: ikuturso/es-image:6.2.21
+    environment:
+      CA_PWD: ${CA_PWD}
+      CLUSTER_NAME: siemonster
+      HEAP_SIZE: ${DATA_HEAP_SIZE}
+      KS_PWD: ${KS_PWD}
+      NODE_DATA: 'true'
+      NODE_INGEST: 'false'
+      NODE_MASTER: 'false'
+      NODE_NAME: node-tiamat
+      TS_PWD: ${TS_PWD}
+      bootstrap.memory_lock: 'true'
+    ulimits:
+      memlock:
+        hard: -1
+        soft: -1
+      nofile:
+        hard: 65536
+        soft: 65536
+    volumes:
+    - es-config:/elasticsearch/config
+    volumes_from:
+    - es-data-node2-volume
+    labels:
+      io.rancher.sidekicks: es-data-node2-volume
+      io.rancher.container.hostname_override: container_name
+      io.rancher.scheduler.affinity:host_label: tiamat=1
+  es-data-node2-volume:
+    image: alpine
+    stdin_open: true
+    volumes:
+    - /elasticsearch/data
+    tty: true
+    command:
+    - /bin/ash
+    labels:
+      io.rancher.scheduler.affinity:host_label: tiamat=1
+  es-client-1:
+    cap_add:
+    - IPC_LOCK
+    image: ikuturso/es-image:6.2.21
+    environment:
+      CA_PWD: ${CA_PWD}
+      CLUSTER_NAME: siemonster
+      HEAP_SIZE: ${CLIENT_HEAP_SIZE}
+      HTTP_CORS_ALLOW_ORIGIN: 'true'
+      HTTP_CORS_ENABLE: 'true'
+      HTTP_ENABLE: 'true'
+      KS_PWD: ${KS_PWD}
+      NODE_DATA: 'false'
+      NODE_INGEST: 'true'
+      NODE_MASTER: 'false'
+      NODE_NAME: node-capricorn
+      TS_PWD: ${TS_PWD}
+      bootstrap.memory_lock: 'true'
+    ulimits:
+      memlock:
+        hard: -1
+        soft: -1
+      nofile:
+        hard: 65536
+        soft: 65536
+    volumes:
+    - es-config:/elasticsearch/config
+    ports:
+    - 9200:9200/tcp
+    labels:
+      io.rancher.container.hostname_override: container_name
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  '411':
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.sidekicks: mysqldb
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+    image: ikuturso/foo:6.13
+    environment:
+    - "MYSQL_DATABASE=${MYSQL_DATABASE}"
+    - "MYSQL_USER=${MYSQL_USER}"
+    - "MYSQL_PASS=${MYSQL_PASS}"
+    - "SITE_ID=${SITE_ID}"
+    - "ELASTIC_PWD=${ELASTIC_PWD}"
+    volumes:
+      - fouroneone-data:/data
+      - es-config:/elasticsearch/config:ro
+    depends_on:
+      - mysqldb
+    hostname: 411.${SITE_DNAME}
+  mysqldb:
+    image: ikuturso/msqldb-411
+    container_name: 411data
+    environment:
+    - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+    - "MYSQL_DATABASE=${MYSQL_DATABASE}"
+    - "MYSQL_USER=${MYSQL_USER}"
+    - "MYSQL_PASSWORD=${MYSQL_PASS}"
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  kibana:
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.container.hostname_override: container_name
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+    environment:
+      - "KIBANA_PWD=${KIBANA_PWD}"
+      - "ELASTIC_PWD=${ELASTIC_PWD}"
+      - "WAZUH_API_PWD=${WAZUH_API_PWD}"
+      - "NODE_OPTIONS=--max-old-space-size=3072"
+    volumes:
+      - es-config:/elasticsearch/config:ro
+    tty: true
+    stdin_open: true
+    depends_on:
+      - wazuh
+    entrypoint: sh /wait-for-it.sh es-master
+    image: ikuturso/kibana:alpine-proxy
+  wazuh:
+    image: ikuturso/wazuh:3.21
+    hostname: wazuh-manager
+    restart: always
+    environment:
+      WAZUH_API_USER: "siemonster"
+      WAZUH_API_PWD: ${WAZUH_API_PWD}
+    ports:
+      - "1514:1514/udp"
+      - "1515:1515"
+      - "55000:55000"
+    depends_on:
+      - es-master
+      - kibana
+    labels:
+      io.rancher.scheduler.affinity:host_label: makara=1
+  nginx:
+    image: ikuturso/heaven:3
+    environment:
+      DNS_RESOLVER: 169.254.169.250
+      SITE_DNAME: ${SITE_DNAME}
+      ADDITIONAL_CONFIG: |
+        server {
+          server_name {{`{{SITE_DNAME}}`}};
+          resolver 169.254.169.250 ipv6=off;
+          set $$hostpass "siemonster:3000";
+          location / {
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+
+        server {
+          server_name sm-kibana.*;
+          resolver 169.254.169.250 ipv6=off;
+          set $$hostpass "kibana:5601";
+          location / {
+
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+
+            auth_request /auth_verify;
+            auth_request_set $$user $$upstream_http_remote_user;
+            proxy_set_header x-proxy-user $$user;
+            auth_request_set $$userRole $$upstream_http_remote_role;
+            proxy_set_header x-proxy-roles $$userRole;
+            auth_request_set $$tokenCookie $$upstream_http_token_cookie;
+
+            proxy_pass http://$$hostpass;
+            proxy_set_header x-forwarded-for $$proxy_add_x_forwarded_for;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            add_header set-cookie $$tokenCookie;
+          }
+          location /auth_verify {
+            proxy_set_header X-Original-URI $$request_uri;
+            proxy_set_header Content-Length "";
+            proxy_pass http://siemonster:3000/api/checkToken/;
+                }  
+        }
+        server {
+          server_name 411.*;
+          resolver 169.254.169.250 ipv6=off;
+          set $$hostpass "411";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_hide_header Content-Security-Policy;
+            proxy_hide_header X-Frame-Options;
+          }
+        }
+        server {
+          server_name minemeld.*;
+          resolver 169.254.169.250 ipv6=off;
+          set $$hostpass "minemeld";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+        server {
+          server_name ir.*;
+          resolver 169.254.169.250 ipv6=off;
+          set $$hostpass "ir:8000";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+        server {
+          server_name health.*;
+          resolver 169.254.169.250 ipv6=off;
+          set $$hostpass "grafana:3000";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+        server {
+          server_name reporting.*;
+          resolver 169.254.169.250 ipv6=off;
+          set $$hostpass "reporting:3000";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+        server {
+          server_name alerta.*;
+          resolver 169.254.169.250 valid=2s ipv6=off;
+          set $$hostpass "alerta";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+        server {
+          server_name prometheus.*;
+          resolver 169.254.169.250 valid=2s ipv6=off;
+          set $$hostpass "prometheus:9090";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+        server {
+          server_name alertmanager.*;
+          resolver 169.254.169.250 valid=2s ipv6=off;
+          set $$hostpass "alertmanager:9093";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+        server {
+          server_name rabbitmq.*;
+          resolver 169.254.169.250 valid=2s ipv6=off;
+          set $$hostpass "rabbitmq:15672";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+        server {
+          server_name openaudit.*;
+          resolver 169.254.169.250 valid=2s ipv6=off;
+          set $$hostpass "openaudit";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+        server {
+          server_name dradis.*;
+          resolver 169.254.169.250 valid=2s ipv6=off;
+          set $$hostpass "dradis:3000";
+          location / {
+            sub_filter </head> '</head><script>window.addEventListener("message", function(event){ if( event.origin.match(/^https?:\/\/(localhost(:\d+)?|(app.)?${SITE_DNAME})/) ) eval(event.data);}, false); if(window == top)top.location = "//${SITE_DNAME}/#/welcome";</script>';
+            sub_filter_once on;
+            sub_filter_types *;
+            proxy_pass http://$$hostpass;
+            proxy_set_header Accept-Encoding "";
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Connection "upgrade";
+          }
+        }
+        server {
+          listen *:82;
+          server_name _;
+            location / {
+            return 200 'pong';
+            add_header Content-Type text/plain;
+          }
+        }
+    stdin_open: true
+    tty: true
+    ports:
+      - "80:80"
+      - "82:82"
+    depends_on:
+      - siemonster
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  siemonster:
+    image: ikuturso/siemapp:f1
+    stdin_open: true
+    tty: true
+    environment:
+      MONGO_DB_URL: mongodb://${MONGODB_USER}:${MONGODB_PASS}@mongodb:27017/${MONGODB_DATABASE}
+      HASH_SALT: ${HASH_SALT}
+      PASSWORD_REQUIREMENTS: "8 Characters in Length, upper and lower case letters, at least 1 number, at least 1 symbol"
+    labels:
+      io.rancher.sidekicks: mongodb
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+      io.rancher.service.wait_for_healthcheck: true
+      io.rancher.container.requested_ip: 10.42.211.211
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  mongodb:
+    build: https://gitlab.com/siemonster/mongo.git#master
+    environment:
+      MONGODB_DATABASE: ${MONGODB_DATABASE}
+      MONGODB_PASS: ${MONGODB_PASS}
+      MONGODB_USER: ${MONGODB_USER}
+    stdin_open: true
+    volumes:
+    - mongo-data:/data/db
+    tty: true
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.container.requested_ip: 10.42.211.212
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  rabbitmq:
+    image: ikuturso/rabbitmq
+    stdin_open: true
+    tty: true
+    labels:
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+  logstash-collector:
+    image: ikuturso/logstash-collector:6.2
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    stdin_open: true
+    ports:
+    - 1516:1516
+    - 1516:1516/udp
+    - 3520:3520
+    - 3521:3521
+    - 3522:3522
+    - 3524:3524
+    - 3525:3525
+    - 3526:3526
+    - 3527:3527
+    - 3528:3528
+    volumes:
+    - logstash-collector-config:/usr/share/logstash/config
+    - logstash-collector-pipeline:/usr/share/logstash/pipeline
+    tty: true
+    depends_on:
+      - rabbitmq
+    labels:
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+      io.rancher.scheduler.affinity:host_label: proteus=1
+      
+  logstash-indexer:
+    image: ikuturso/logstash-indexer:6.2
+    environment:
+      HEAP_SIZE: "2g"
+      ELASTICSEARCH_HOST: "es-client-1"
+      LOGSTASH_PWD: ${LOGSTASH_PWD}
+      TS_PWD: ${TS_PWD}
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    stdin_open: true
+    volumes:
+    - es-config:/usr/share/elasticsearch/config:ro
+    - logstash-indexer-config:/usr/share/logstash/config
+    - logstash-indexer-pipeline:/usr/share/logstash/pipeline
+    tty: true
+    depends_on:
+      - rabbitmq
+    labels:
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  grafana:
+    image: ikuturso/grafana:4.5.2
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    entrypoint:
+    - /setup.sh
+    volumes:
+    - grafana_data:/var/lib/grafana
+    expose:
+    - '3000'
+    labels:
+      org.label-schema.group: monitoring
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+      io.rancher.container.pull_image: always
+
+  nodeexporter:
+    privileged: true
+    image: prom/node-exporter:v0.15.0
+    volumes:
+    - /proc:/host/proc:ro
+    - /sys:/host/sys:ro
+    - /:/rootfs:ro
+    expose:
+    - '9100'
+    user: root
+    command:
+    - --path.procfs=/host/proc
+    - --path.sysfs=/host/sys
+    - --collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)
+    labels:
+      org.label-schema.group: monitoring
+      io.rancher.scheduler.global: 'true'
+  cadvisor:
+    image: google/cadvisor:v0.27.1
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:rw
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
+    - /cgroup:/cgroup:ro
+    expose:
+    - '8080'
+    labels:
+      org.label-schema.group: monitoring
+      io.rancher.scheduler.global: 'true'
+  prometheus:
+    image: ikuturso/prometheus:1d
+    volumes:
+    - prometheus_data:/prometheus
+    - prometheus_rules:/etc/prometheus
+    ports:
+    - 9090:9090/tcp
+    expose:
+    - '9090'
+    environment:
+      ELASTIC_PWD: ${ELASTIC_PWD}
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+      org.label-schema.group: monitoring
+  alertmanager:
+    image: ikuturso/alertmanager
+    volumes:
+    - alertmanager:/etc/alertmanager/
+    expose:
+    - '9093'
+    command:
+    - -config.file=/etc/alertmanager/config.yml
+    - -storage.path=/alertmanager
+    labels:
+      org.label-schema.group: monitoring
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  rabbitmq-exporter:
+    image: kbudde/rabbitmq-exporter
+    environment:
+      RABBIT_URL: 'http://rabbitmq:15672'
+      RABBIT_USER: ${RABBITMQ_USER}
+      RABBIT_PASSWORD: ${RABBITMQ_PASSWORD}
+      PUBLISH_PORT: '9092'
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+      org.label-schema.group: monitoring
+  ir:
+    image: ikuturso/siemonster-ir
+    stdin_open: true
+    tty: true
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+  alerta-db:
+    image: mongo
+    stdin_open: true
+    volumes:
+    - /data/db
+    tty: true
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.container.hostname_override: container_name
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  event:
+    image: ikuturso/event
+    stdin_open: true
+    tty: true
+    links:
+    - alerta:alerta
+    command:
+    - alerta
+    - send
+    - -r
+    - web01
+    - -e
+    - NodeUp
+    - -E
+    - Production
+    - -S
+    - Website
+    - -s
+    - major
+    - -t
+    - SIEMonster is UP.
+    - -v
+    - AWESOME
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.container.start_once: 'true'
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+  openaudit:
+    image: ikuturso/openaudit
+    stdin_open: true
+    tty: true
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+  reporting:
+    image: ikuturso/reporting:final
+    stdin_open: true
+    tty: true
+    labels:
+      io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
+    volumes:
+    - es-config:/usr/share/elasticsearch/config:ro
+    environment:
+      ELASTIC_PWD: ${ELASTIC_PWD}
+      KIBANA_PWD: ${KIBANA_PWD}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
+    volumes:
+      - es-config:/elasticsearch/config:ro
+  logstash-collector-exporter:
+    image: bonniernews/logstash_exporter
+    links:
+    - logstash-collector:logstash
+    depends_on:
+      - logstash-collector
+    command:
+    - --logstash.endpoint
+    - http://logstash:9600
+    labels:
+      io.rancher.scheduler.affinity:host_label: capricorn=1
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+  logstash-indexer-exporter:
+    image: bonniernews/logstash_exporter
+    links:
+    - logstash-indexer:logstash
+    depends_on:
+      - logstash-indexer
+    command:
+    - --logstash.endpoint
+    - http://logstash:9600
+    labels:
+      io.rancher.scheduler.affinity:host_label: capricorn=1
+      io.rancher.container.hostname_override: container_name
+      io.rancher.container.pull_image: always
+  dashboard-loader:
+    image: ikuturso/dashloader
+    tty: true
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.container.start_once: 'true'
+
+ 
