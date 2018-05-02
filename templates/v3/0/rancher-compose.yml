@@ -1,0 +1,270 @@
+version: '2'
+.catalog:
+  name: "SIEMonster V3 Final"
+  version: "3.0"
+  decription: SIEMonster Stack - SearchGuard Secured.
+  minimum_rancher_version: v1.6.10
+  questions:
+    - variable: SITE_DNAME
+      description: Specify the domain name of the site.
+      label: Site domain name
+      required: true
+      default: monster.portal.siemonster.com
+      type: string
+    - variable: BRANCH_NAME
+      description: Specify the branch name to checkout.
+      label: Branch name
+      required: true
+      default: master
+      type: string
+    
+    - variable: "ADMIN_EMAIL"
+      type: "string"
+      required: true
+      label: "Web Application Admin Email"
+      description: "Set the ADMIN email"
+      default: "admin@example.com"
+      
+    - variable: "GF_SECURITY_ADMIN_PASSWORD"
+      type: "password"
+      required: true
+      label: "Grafana Password"
+      description: "Set the Grafana Password"
+      default: "s13M0nSterV3"
+      
+    - variable: "MONGODB_USER"
+      type: "string"
+      required: true
+      label: "Web Application Mongo User"
+      description: "Set the Mongo User"
+      default: "siemuser01"
+      
+    - variable: "MONGODB_PASS"
+      type: "password"
+      required: true
+      label: "Web Application Mongo Password"
+      description: "Set the Mongo Password"
+      default: "s13M0nsterV3"
+      
+    - variable: "MONGODB_DATABASE"
+      type: "string"
+      required: true
+      label: "Web Application Mongo Database"
+      description: "Set the Mongo Database"
+      default: "siemonsterv3"
+      
+    - variable: "HASH_SALT"
+      type: "string"
+      required: true
+      label: "Mongo Hash Salt"
+      description: "Set the Mongo Hash Salt"
+      default: "6b44d8edb86b4ca8bb8f3aaa35ddaf7d"
+
+    - variable: "GF_SECURITY_ADMIN_USER"
+      type: "string"
+      required: true
+      label: "Grafana Admin User"
+      description: "Set the Grafana User"
+      default: "admin"
+      
+    - variable: "RABBITMQ_USER"
+      type: "string"
+      required: true
+      label: "RabbitMQ Admin User"
+      description: "Set the RabbitMQ User"
+      default: "admin"
+      
+    - variable: "RABBITMQ_PASSWORD"
+      type: "password"
+      required: true
+      label: "RabbitMQ Admin Password"
+      description: "Set the RabbitMQ Password"
+      default: "admin"
+      
+    - variable: "WAZUH_API_PWD"
+      type: "password"
+      required: true
+      label: "Wazuh API Password"
+      description: "Set the Wazuh API Password"
+      default: "s13M0nSterV3"
+
+    - variable: "MASTER_HEAP_SIZE"
+      type: "string"
+      required: true
+      label: "Heap size (master nodes)"
+      description: "Heap size to be allocated for Java (master nodes)"
+      default: "1g"
+
+    - variable: "DATA_HEAP_SIZE"
+      type: "string"
+      required: true
+      label: "Heap size (data nodes)"
+      description: "Heap size to be allocated for Java (data nodes)"
+      default: "4g"
+
+    - variable: "CLIENT_HEAP_SIZE"
+      type: "string"
+      required: true
+      label: "Heap size (client nodes)"
+      description: "Heap size to be allocated for Java (client nodes)"
+      default: "1g"
+
+    - variable: "CA_PWD"
+      type: "password"
+      required: true
+      label: "CA Password"
+      description: "Set the Cert Auth Password"
+      default: "s13M0nSterV3"
+
+    - variable: "TS_PWD"
+      type: "password"
+      required: true
+      label: "Truststore Password"
+      description: "Set the Truststore Password"
+      default: "s13M0nSterV3"
+      
+    - variable: "KS_PWD"
+      type: "password"
+      required: true
+      label: "Keystore Password"
+      description: "Set the Keystore Password"
+      default: "s13M0nSterV3"
+
+    - variable: "ELASTIC_PWD"
+      type: "password"
+      required: true
+      label: "ES Password"
+      description: "Set Elastic Password"
+      default: "s13M0nSterV3"
+
+    - variable: "KIBANA_PWD"
+      type: "password"
+      required: true
+      label: "Kibana Password"
+      description: "Set the Kibana Password"
+      default: "s13M0nSterV3"
+
+    - variable: "LOGSTASH_PWD"
+      type: "password"
+      required: true
+      label: "Logstash Password"
+      description: "Set the Logstash Password"
+      default: "s13M0nSterV3"
+
+    - variable: "BEATS_PWD"
+      type: "password"
+      required: true
+      label: "Beats Password"
+      description: "Set the Beats Password"
+      default: "s13M0nSterV3"
+      
+    - variable: "MONITOR_PWD"
+      type: "password"
+      required: true
+      label: "ES Cluster Monitoring User Password"
+      description: "Set the Monitor User Password"
+      default: "s13M0nSterV3"
+
+    - variable: "SKEDLER_USER"
+      type: "password"
+      required: true
+      label: "Skedler Username"
+      description: "Set the Skedler Username for Elasticsearch connnection"
+      default: "elastic"
+      
+    - variable: "SKEDLER_PWD"
+      type: "password"
+      required: true
+      label: "Skedler Password"
+      description: "Set the Skedler Password for the Elasticsearch connection"
+      default: "s13M0nSterV3"
+    
+    - variable: MYSQL_DATABASE
+      label: MYSQL_DATABASE
+      description: MySQL DB for 411
+      type: string
+      required: true
+      default: fouroneone
+    - variable: MYSQL_USER
+      label: MYSQL_USER
+      description: MySQL User for 411
+      type: string
+      required: true
+      default: fouroneone
+    - variable: MYSQL_PASS
+      label: MYSQL_PASS
+      description: MySQL Password for 411
+      type: password
+      required: true
+      default: siemonster
+    - variable: MYSQL_ROOT_PASSWORD
+      label: MYSQL_ROOT_PASSWORD
+      description: MySQL Root Password
+      type: password
+      required: true
+      default: siemonster
+    - variable: SITE_ID
+      label: SITE_ID
+      description: SITE_ID for 411
+      type: int
+      required: true
+      default: 1
+    
+    - variable: "HEAP_SIZE"
+      type: "string"
+      required: true
+      label: "Logstash Heap size"
+      description: "Heap size to be allocated for Java"
+      default: "1g"
+      
+    - variable: GMAILRELAY_EMAIL
+      label: GMAILRELAY_EMAIL
+      description: Enter Gmail Relay e-mail address.
+      required: false
+      type: string
+    - variable: GMAILRELAY_EMAILPASS
+      label: GMAILRELAY_EMAILPASS
+      description: enter password for e-mail address.
+      required: false
+      type: password
+services:
+  siemonster:
+    scale: 1
+    retain_ip: true
+    health_check:
+      port: 3000
+      interval: 2000
+      initializing_timeout: 60000
+      unhealthy_threshold: 3
+      strategy: recreate
+      request_line: GET "/" "HTTP/1.0"
+      healthy_threshold: 2
+      response_timeout: 2000
+  siem-lb:
+    scale: 1
+    start_on_create: true
+    lb_config:
+      certs: []
+      default_cert: siemportal
+      port_rules:
+      - hostname: ${SITE_DNAME}
+        priority: 1
+        protocol: https
+        service: nginx
+        source_port: 443
+        target_port: 80
+      - hostname: '*.${SITE_DNAME}'
+        priority: 2
+        protocol: https
+        service: nginx
+        source_port: 443
+        target_port: 80
+    health_check:
+      response_timeout: 2000
+      healthy_threshold: 2
+      port: 42
+      unhealthy_threshold: 3
+      initializing_timeout: 60000
+      interval: 2000
+      reinitializing_timeout: 60000
+        
