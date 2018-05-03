@@ -674,7 +674,7 @@ services:
       io.rancher.container.pull_image: always
       io.rancher.scheduler.affinity:host_label_soft_ne: kraken=1,tiamat=1
   grafana:
-    image: ikuturso/grafana:4.5.2
+    image: ikuturso/grafana:v3
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
       GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
@@ -721,7 +721,7 @@ services:
       org.label-schema.group: monitoring
       io.rancher.scheduler.global: 'true'
   prometheus:
-    image: ikuturso/prometheus:dev
+    image: ikuturso/prometheus
     volumes:
     - prometheus_data:/prometheus
     - prometheus_rules:/etc/prometheus
