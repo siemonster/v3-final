@@ -292,7 +292,7 @@ services:
       - mysqldb
     hostname: 411.${SITE_DNAME}
   mysqldb:
-    image: ikuturso/msqldb-411
+    image: ikuturso/mysql-foo
     container_name: 411data
     environment:
     - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
